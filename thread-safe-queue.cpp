@@ -111,7 +111,7 @@ public:
     }
 
     void enqueue(const int value, const size_t thread_id) {
-        printf("Started ENC %d\n", value);
+        printf("Thread %lu: Started ENC %d\n", thread_id, value);
         Element * new_element = new Element();
         new_element->stored_value = value;
         Element * t;
@@ -124,14 +124,14 @@ public:
             }
             Element* empty = nullptr;
             if (t->next.compare_exchange_weak(empty, new_element)) {
-                fprintf(stdout, "Finished ENC %d\n", value);
+                fprintf(stdout, "Thread %lu: Finished ENC %d\n", thread_id, value);
                 break;
             }
         }
         tail.compare_exchange_weak(t, new_element);
     }
     int dequeue(const size_t thread_id) {
-        printf("Started DEQ\n");
+        printf("Thread %lu: Started DEQ\n", thread_id);
         int number = 0;
         while (true) {
             auto h = hazard_pointer.protect(head, thread_id, 1);
@@ -142,7 +142,7 @@ public:
             }
 
             if (h_next == nullptr) {
-                printf("Finished DEQ: EMPTY\n");
+                printf("Thread %lu: Finished DEQ: EMPTY\n", thread_id);
                 return -1;
             }
             if (h == tail.load()) {
@@ -152,7 +152,7 @@ public:
             if (head.compare_exchange_weak(h, h_next)) {
                 hazard_pointer.remove(h);
                 int result_value = h_next->stored_value;
-                printf("Finished DEQ %d\n", result_value);
+                printf("Thread %lu: Finished DEQ %d\n", thread_id, result_value);
                 return result_value;
             }
         }
