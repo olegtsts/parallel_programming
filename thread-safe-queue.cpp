@@ -161,6 +161,15 @@ public:
     void cleanup_locals(const size_t thread_id) {
         hazard_pointer.cleanup(thread_id);
     }
+
+    ~ThreadSafeQueue() {
+        Element* to_delete = head.load();
+        while (to_delete) {
+            Element * next_pointer = to_delete->next;
+            delete to_delete;
+            to_delete = next_pointer;
+        }
+    }
 private:
     std::atomic<Element *> head;
     std::atomic<Element *> tail;
