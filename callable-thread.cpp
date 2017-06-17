@@ -9,8 +9,10 @@ public:
 };
 
 int main () {
-    Callable callable;
-    std::thread t(callable);
+    std::thread t{Callable()};
     t.join();
+    std::thread([] {
+            std::cout << "Hello2\n";
+    }).detach();
     return 0;
 }
