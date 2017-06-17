@@ -26,7 +26,7 @@ int main() {
     Modifyable modifyable;
     modify(modifyable);
     modifyable.output();
-    std::thread t(modify, modifyable);
+    std::thread t(modify, std::ref(modifyable));
     t.join();
     modifyable.output();
     return 0;
