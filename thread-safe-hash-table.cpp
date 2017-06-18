@@ -5,6 +5,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <map>
 
 template <typename TKey, typename TValue, typename THash=std::hash<TKey> >
 class ThreadSafeHashTable {
@@ -33,6 +34,19 @@ public:
     }
     void remove_mapping(const TKey& key) {
         return get_bucket(key).remove_mapping(key);
+    }
+    std::map<TKey, TValue> get_map() const {
+        std::vector<std::unique_lock<std::shared_timed_mutex> > locks;
+        for (size_t i = 0; i < buckets.size(); ++i) {
+            locks.push_back(std::unique_lock<std::shared_timed_mutex> (buckets[i].mutex));
+        }
+        std::map<TKey,TValue> res;
+        for (size_t i = 0; i < buckets.size(); ++i) {
+            for (typename BucketType::TBucketConstIterator it = buckets[i].data.begin(); it != buckets[i].data.end(); ++it) {
+                res.insert(*it);
+            }
+        }
+        return res;
     }
 private:
     class BucketType {
