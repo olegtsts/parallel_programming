@@ -28,18 +28,18 @@ TValue parallel_accumulate(Iterator first, Iterator last, TValue init) {
     }
     size_t num_threads = std::min(hardware_threads, max_threads);
     size_t block_size = length / num_threads;
-    std::vector<TValue> results(num_threads + 1);
-    std::vector<std::thread> threads(num_threads);
+    std::vector<TValue> results(num_threads);
+    std::vector<std::thread> threads(static_cast<int>(num_threads) - 1);
     Iterator current = first;
-    for (size_t i = 0; i < num_threads; ++i) {
+    for (size_t i = 0; i + 1 < num_threads; ++i) {
         Iterator current_end = current;
         std::advance(current_end, block_size);
         threads[i] = std::thread(BlockCalculation<Iterator, TValue>(), current, current_end, std::ref(results[i]));
         current = current_end;
     }
-    results[num_threads] = std::accumulate(current, last, init);
+    BlockCalculation<Iterator, TValue>()(current, last, std::ref(results[static_cast<int>(num_threads) - 1]));
     std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
-    return std::accumulate(results.begin(), results.end(), 0);
+    return std::accumulate(results.begin(), results.end(), init);
 }
 
 int main() {
