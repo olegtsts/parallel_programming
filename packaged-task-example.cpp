@@ -38,6 +38,9 @@ int main() {
         auto f2 = post_task();
         f1.wait();
         f2.wait();
+        std::cout << (f1.valid() ? "1\n" : "0\n");
+        f1.get();
+        std::cout << (f1.valid() ? "1\n" : "0\n");
     });
     std::thread t2([] {
         process_tasks();
