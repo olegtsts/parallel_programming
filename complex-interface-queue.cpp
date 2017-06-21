@@ -54,7 +54,7 @@ public:
         return data.empty();
     }
 private:
-    std::mutex mu;
+    mutable std::mutex mu;
     std::queue <T> data;
     std::condition_variable cond;
 };
