@@ -14,18 +14,14 @@ public:
     void push(const int element){
         std::unique_lock<std::mutex> lock(m);
 
-        while (queue.size() >= max_size) {
-            full_condition.wait(lock);
-        }
+        full_condition.wait(lock, [this] {return queue.size() < max_size;});
         queue.push(element);
         std::cout << "Pushed " << element << std::endl;
         empty_condition.notify_all();
     }
     int pop() {
         std::unique_lock<std::mutex> lock(m);
-        while (queue.size() == 0) {
-            empty_condition.wait(lock);
-        }
+        empty_condition.wait(lock, [this] {return queue.size() > 0;});
         int element = queue.front();
         queue.pop();
         std::cout << "Popped " << element << std::endl;
