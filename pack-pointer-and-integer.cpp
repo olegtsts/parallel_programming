@@ -4,7 +4,7 @@
 #include <atomic>
 
 template <typename T>
-struct PackedCountedPointer {
+class PackedCountedPointer {
 public:
     PackedCountedPointer()
     {}
