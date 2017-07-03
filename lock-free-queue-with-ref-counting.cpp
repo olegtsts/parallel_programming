@@ -1,6 +1,8 @@
 #include <iostream>
 #include <atomic>
 #include <memory>
+#include <thread>
+#include <sstream>
 
 template <typename T>
 class LockFreeQueue {
@@ -120,9 +122,31 @@ private:
     std::atomic<CountedNodePtr> head;
     std::atomic<CountedNodePtr> tail;
 };
+
+void thread_push(const int number, LockFreeQueue<int>& queue) {
+    queue.push(number);
+}
+void thread_pop(LockFreeQueue<int>& queue) {
+    auto ptr = queue.pop();
+    std::stringstream ss;
+    ss <<  (ptr.get() ? *ptr : 0) << std::endl;
+    std::cout << ss.str();
+}
 int main() {
+    std::cout << "Started\n";
     LockFreeQueue<int> queue;
-    queue.push(5);
-    std::cout << *queue.pop() << std::endl;
+    std::thread t1(thread_push, 1, std::ref(queue));
+    std::thread t2(thread_push, 2, std::ref(queue));
+    std::thread t3(thread_push, 3, std::ref(queue));
+    std::thread t4(thread_pop, std::ref(queue));
+    std::thread t5(thread_pop, std::ref(queue));
+    std::thread t6(thread_pop, std::ref(queue));
+    t1.join();
+    t2.join();
+    t3.join();
+    t4.join();
+    t5.join();
+    t6.join();
+    std::cout << "Done\n";
     return 0;
 }
