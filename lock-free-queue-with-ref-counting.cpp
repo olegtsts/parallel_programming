@@ -21,14 +21,13 @@ private:
     struct Node {
         std::atomic<T*> data;
         std::atomic<NodeCounter> count;
-        CountedNodePtr next;
+        std::atomic<CountedNodePtr> next;
 
         Node()
         : data(nullptr)
         {
             count.store(NodeCounter{0, 2});
-            next.external_count = 0;
-            next.ptr = nullptr;
+            next.store(CountedNodePtr{0, nullptr});
         }
 
         void release_ref() {
@@ -44,6 +43,16 @@ private:
             }
         }
     };
+
+    void set_new_tail(CountedNodePtr& old_tail, const CountedNodePtr& new_tail) {
+        Node* const current_tail_ptr = old_tail.ptr;
+        while (!tail.compare_exchange_weak(old_tail, new_tail) && old_tail.ptr == current_tail_ptr) {}
+        if (old_tail.ptr == current_tail_ptr) {
+            free_external_counter(old_tail);
+        } else {
+            current_tail_ptr->release_ref();
+        }
+    }
 public:
     LockFreeQueue() {
         CountedNodePtr new_next;
@@ -91,13 +100,22 @@ public:
             increase_external_count(tail, old_tail);
             T* old_data = nullptr;
             if (old_tail.ptr->data.compare_exchange_strong(old_data, new_data.get())) {
-                old_tail.ptr->next = new_next;
-                old_tail = tail.exchange(new_next);
-                free_external_counter(old_tail);
+                CountedNodePtr old_next{0, nullptr};
+                if (!old_tail.ptr->next.compare_exchange_strong(old_next, new_next)) {
+                    delete new_next.ptr;
+                    new_next = old_next;
+                }
+                set_new_tail(old_tail, new_next);
                 new_data.release();
                 break;
+            } else {
+                CountedNodePtr old_next{0, nullptr};
+                if (old_tail.ptr->next.compare_exchange_strong(old_next, new_next)) {
+                    old_next = new_next;
+                    new_next.ptr = new Node();
+                }
+                set_new_tail(old_tail, old_next);
             }
-            old_tail.ptr->release_ref();
         }
     }
 
@@ -110,7 +128,8 @@ public:
                 ptr->release_ref();
                 return std::unique_ptr<T>();
             }
-            if (head.compare_exchange_strong(old_head, ptr->next)) {
+            CountedNodePtr next = ptr->next.load();
+            if (head.compare_exchange_strong(old_head, next)) {
                 T* res = ptr->data.exchange(nullptr);
                 free_external_counter(old_head);
                 return std::unique_ptr<T> (res);
@@ -123,10 +142,10 @@ private:
     std::atomic<CountedNodePtr> tail;
 };
 
-void thread_push(const int number, LockFreeQueue<int>& queue) {
+void thread_push(const int number, LockFreeQueue<int>& queue) noexcept {
     queue.push(number);
 }
-void thread_pop(LockFreeQueue<int>& queue) {
+void thread_pop(LockFreeQueue<int>& queue) noexcept {
     auto ptr = queue.pop();
     std::stringstream ss;
     ss <<  (ptr.get() ? *ptr : 0) << std::endl;
