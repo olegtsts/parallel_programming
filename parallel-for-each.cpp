@@ -54,10 +54,10 @@ void parallel_for_each(Iterator first_iter, Iterator last_iter, Func f) {
     }
 }
 int main() {
-    std::vector<int> a{1,2,3};
+    std::vector<int> a{1,2,3,4,5,6,7,8,9,10};
     parallel_for_each(a.begin(), a.end(), [] (const int element) {
         std::stringstream ss;
-        ss << element << std::endl;
+        ss << std::this_thread::get_id() << " " << element << std::endl;
         std::cout << ss.str();
     });
     return 0;
