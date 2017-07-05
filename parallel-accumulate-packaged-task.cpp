@@ -5,6 +5,23 @@
 #include <thread>
 #include <future>
 
+class JoinThreads {
+public:
+    explicit JoinThreads(std::vector<std::thread>& threads)
+    : threads(threads)
+    {}
+
+    ~JoinThreads() {
+        for (auto& thread: threads) {
+            if (thread.joinable()) {
+                thread.join();
+            }
+        }
+    }
+private:
+    std::vector<std::thread>& threads;
+};
+
 template <typename Iterator, typename TValue>
 class BlockCalculation {
 public:
@@ -30,6 +47,7 @@ TValue parallel_accumulate(Iterator first, Iterator last, TValue init) {
     std::vector<std::future<TValue>> futures(num_threads - 1);
     std::vector<std::thread> threads(static_cast<int>(num_threads) - 1);
     Iterator current = first;
+    JoinThreads joiner(threads);
     for (size_t i = 0; i + 1 < num_threads; ++i) {
         Iterator current_end = current;
         std::advance(current_end, block_size);
@@ -38,12 +56,11 @@ TValue parallel_accumulate(Iterator first, Iterator last, TValue init) {
         threads[i] = std::thread(std::move(task), current, current_end);
         current = current_end;
     }
-    TValue last_result = BlockCalculation<Iterator, TValue>()(current, last);
-    std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
     TValue result = init;
     for (size_t i = 0; i < static_cast<size_t>(static_cast<int>(num_threads) - 1); ++i) {
         result += futures[i].get();
     }
+    TValue last_result = BlockCalculation<Iterator, TValue>()(current, last);
     result += last_result;
     return result;
 }
