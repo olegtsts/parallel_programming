@@ -205,12 +205,7 @@ class ThreadPool {
 private:
     void WorkerThread() {
         while (!done) {
-            std::unique_ptr<FunctionWrapper> ptr = work_queue.pop();
-            if (ptr != nullptr) {
-                ptr->operator()();
-            } else {
-                std::this_thread::yield();
-            }
+            RunPendingTask();
         }
     }
 public:
@@ -238,6 +233,14 @@ public:
     }
     ~ThreadPool() {
         done = true;
+    }
+    void RunPendingTask() {
+        std::unique_ptr<FunctionWrapper> ptr = work_queue.pop();
+        if (ptr != nullptr) {
+            ptr->operator()();
+        } else {
+            std::this_thread::yield();
+        }
     }
 private:
     std::atomic<bool> done;
