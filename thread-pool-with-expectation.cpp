@@ -217,7 +217,7 @@ public:
     template <typename FunctionType>
     std::future<typename std::result_of<FunctionType()>::type> Submit(FunctionType f) {
         typedef typename std::result_of<FunctionType()>::type TResult;
-        std::packaged_task<TResult()> task(f);
+        std::packaged_task<TResult()> task(std::move(f));
         std::future<TResult> res(task.get_future());
         work_queue.push(std::move(task));
         return res;
