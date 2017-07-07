@@ -96,3 +96,20 @@ int main() {
     std::cout << std::memcmp(&k, &l, sizeof(CountedNodePtr3)) << " " << sizeof(CountedNodePtr3) << std::endl;
     return 0;
 }
+// output on osx
+// 0 16
+// 0
+// 0
+// 0 16
+// 0 16
+// 86 16
+//
+// output on linux
+//0 16
+//0
+//0
+//0 16
+//-113 16
+//0 16
+//
+//Last two memcmp operations have no exact guarantees on 64-bit systems
