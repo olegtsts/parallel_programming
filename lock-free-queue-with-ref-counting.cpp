@@ -3,6 +3,7 @@
 #include <memory>
 #include <thread>
 #include <sstream>
+#include <functional>
 
 template <typename T>
 class LockFreeQueue {
