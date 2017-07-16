@@ -58,7 +58,9 @@ private:
                 }
                 new_counter = copied_counter;
                 ++new_counter.external_count;
-            } while (!counter.compare_exchange_strong(copied_counter, new_counter));
+            } while (!counter.compare_exchange_strong(copied_counter, new_counter,
+                                                      std::memory_order_acquire,
+                                                      std::memory_order_relaxed));
             copied_counter.external_count = new_counter.external_count;
         }
 
