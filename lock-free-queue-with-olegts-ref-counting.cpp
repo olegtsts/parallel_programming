@@ -63,7 +63,7 @@ private:
         CountedNodePtrCopyGuard& operator=(const CountedNodePtrCopyGuard&) = delete;
         CountedNodePtrCopyGuard(const CountedNodePtrCopyGuard&) = delete;
 
-        CountedNodePtr GetCopy2() {
+        CountedNodePtr GetCopy() {
             return copied_counter;
         }
 
@@ -132,7 +132,7 @@ public:
 
         while (true) {
             CountedNodePtrCopyGuard tail_copy(tail);
-            CountedNodePtr old_tail = tail_copy.GetCopy2();
+            CountedNodePtr old_tail = tail_copy.GetCopy();
             T* old_data = nullptr;
             if (old_tail.ptr->data.compare_exchange_strong(old_data, new_data.get())) {
                 CountedNodePtr old_next{0, nullptr};
@@ -159,13 +159,13 @@ public:
     std::unique_ptr<T> Pop() {
         while (true) {
             CountedNodePtrCopyGuard head_copy(head);
-            CountedNodePtr old_head = head_copy.GetCopy2();
+            CountedNodePtr old_head = head_copy.GetCopy();
             Node * ptr = old_head.ptr;
             if (ptr == tail.load().ptr) {
                 return std::unique_ptr<T>();
             }
             CountedNodePtrCopyGuard next_copy(ptr->next);
-            CountedNodePtr old_next = next_copy.GetCopy2();
+            CountedNodePtr old_next = next_copy.GetCopy();
             if (old_next.ptr != nullptr) {
                 CountedNodePtr new_head = old_next;
                 new_head.external_count = 1;
