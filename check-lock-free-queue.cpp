@@ -2,7 +2,7 @@
 #include <iostream>
 
 int main() {
-    const int each_output = 100;
+    const int each_output = 1;
     int tests_passed = 0;
     while (true) {
         if (system("./queue.out 1> out 2>&1")) {

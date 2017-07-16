@@ -1,12 +1,13 @@
-#include <iostream>
 #include <atomic>
 #include <memory>
-#include <sstream>
-#include <string>
 #include <future>
 #include <thread>
 #include <vector>
 #include <functional>
+#include <iostream>
+#include <cassert>
+
+std::atomic<int> ref_counter(0);
 
 template <typename T>
 class LockFreeQueue {
@@ -35,16 +36,11 @@ private:
         }
     };
 
-    static void OutputMessageAndPointer(const std::string& message, Node* pointer) {
-        std::stringstream ss;
-        ss << std::this_thread::get_id() << " " << message << " "  << pointer << "\n";
-        std::cerr << ss.str();
+    static void RegisterCreatedPointer(Node* pointer) {
+        ++ref_counter;
     }
-    static void OutputCreatedPointer(Node* pointer) {
-        OutputMessageAndPointer("Allocated pointer", pointer);
-    }
-    static void OutputDeletedPointer(Node* pointer) {
-        OutputMessageAndPointer("Deallocated pointer", pointer);
+    static void RegisterDeletedPointer(Node* pointer) {
+        --ref_counter;
     }
 
     struct CountedNodePtrCopyGuard {
@@ -82,7 +78,7 @@ private:
                             std::memory_order_acquire, std::memory_order_relaxed));
                 if (!new_counter.internal_count && !new_counter.external_counters) {
                     delete copied_counter.ptr;
-                    OutputDeletedPointer(copied_counter.ptr);
+                    RegisterDeletedPointer(copied_counter.ptr);
                 }
             }
         }
@@ -104,7 +100,7 @@ private:
 
         if (!new_counter.internal_count && !new_counter.external_counters) {
             delete ptr;
-            OutputDeletedPointer(ptr);
+            RegisterDeletedPointer(ptr);
         }
     }
 
@@ -120,7 +116,7 @@ public:
     LockFreeQueue() {
         CountedNodePtr empty_node;
         empty_node.ptr = new Node();
-        OutputCreatedPointer(empty_node.ptr);
+        RegisterCreatedPointer(empty_node.ptr);
         empty_node.external_count = 1;
         head.store(empty_node);
         tail.store(empty_node);
@@ -131,7 +127,7 @@ public:
         std::unique_ptr<T> new_data(new T(new_value));
         CountedNodePtr new_next;
         new_next.ptr = new Node();
-        OutputCreatedPointer(new_next.ptr);
+        RegisterCreatedPointer(new_next.ptr);
         new_next.external_count = 1;
 
         while (true) {
@@ -142,7 +138,7 @@ public:
                 CountedNodePtr old_next{0, nullptr};
                 if (!old_tail.ptr->next.compare_exchange_strong(old_next, new_next)) {
                     delete new_next.ptr;
-                    OutputDeletedPointer(new_next.ptr);
+                    RegisterDeletedPointer(new_next.ptr);
                     new_next = old_next;
                 }
                 SetNewTail(old_tail, new_next);
@@ -153,7 +149,7 @@ public:
                 if (old_tail.ptr->next.compare_exchange_strong(old_next, new_next)) {
                     old_next = new_next;
                     new_next.ptr = new Node();
-                    OutputCreatedPointer(new_next.ptr);
+                    RegisterCreatedPointer(new_next.ptr);
                 }
                 SetNewTail(old_tail, old_next);
             }
@@ -200,37 +196,36 @@ private:
 
 void thread_push(const int number, LockFreeQueue<int>& queue, std::shared_future<void> wait_to_go) noexcept {
     wait_to_go.wait();
-    for (size_t i = 0;i < 100; ++i) {
+    for (size_t i = 0;i < 10000000; ++i) {
         queue.Push(number);
     }
 }
 void thread_pop(LockFreeQueue<int>& queue, std::shared_future<void> wait_to_go) noexcept {
     wait_to_go.wait();
-    for (size_t i = 0; i < 150; ++i) {
+    for (size_t i = 0; i < 10000000; ++i) {
         auto ptr = queue.Pop();
-        std::stringstream ss;
-        ss <<  (ptr.get() ? *ptr : 0) << std::endl;
-        std::cerr << ss.str();
     }
 }
 int main() {
     std::cout << "Started\n";
-    LockFreeQueue<int> queue;
-
-    std::promise<void> go;
-    std::shared_future<void> wait_to_go = go.get_future();
-    std::vector<std::thread> threads;
-    for (size_t i = 0; i < 2; ++i) {
-        threads.push_back(std::thread(thread_push, i + 100, std::ref(queue), wait_to_go));
-    }
-    for (size_t i = 0; i < 2; ++i) {
-        threads.push_back(std::thread(thread_pop, std::ref(queue), wait_to_go));
-    }
-    go.set_value();
-    for (auto& one_thread: threads) {
-        one_thread.join();
-    }
-
+    {
+        LockFreeQueue<int> queue;
+        std::promise<void> go;
+        std::shared_future<void> wait_to_go = go.get_future();
+        std::vector<std::thread> threads;
+        for (size_t i = 0; i < 2; ++i) {
+            threads.push_back(std::thread(thread_push, i + 100, std::ref(queue), wait_to_go));
+        }
+        for (size_t i = 0; i < 2; ++i) {
+            threads.push_back(std::thread(thread_pop, std::ref(queue), wait_to_go));
+        }
+        go.set_value();
+        for (auto& one_thread: threads) {
+            one_thread.join();
+        }
+    };
+    std::cout << "ref_counter = " << ref_counter << std::endl;
+    assert(ref_counter == 0);
     std::cout << "Done\n";
     return 0;
 }
