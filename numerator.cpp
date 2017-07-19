@@ -1,65 +1,38 @@
 #include <iostream>
 #include <vector>
-#include <algorithm>
-#include <queue>
+#include <deque>
+#include <memory>
 
 template <typename T>
 class TypeSpecifier {};
 
-template <typename ... Args>
-class Numerator {
-public:
-    int counter;
-
-    Numerator()
-    : counter(0)
-    {}
-
-    void GetCounterImpl() {}
-
-    virtual ~Numerator() {}
-};
-
-
-template <typename T, typename ... Args>
-class Numerator<T, Args...> : public Numerator<Args...> {
-private:
-    int own_counter;
-public:
-    using Numerator<Args...>::counter;
-    using Numerator<Args...>::GetCounterImpl;
-
-    Numerator()
-    : Numerator<Args...>()
-    {
-        own_counter = counter++;
-    }
-
-    int GetCounterImpl(TypeSpecifier<T>) {
-        return own_counter;
-    }
-
-    template <typename T2>
-    int GetCounter() {
-        return GetCounterImpl(TypeSpecifier<T2>());
-    }
-
-    virtual ~Numerator() {}
-};
-
-template <template <typename TPiper> class From, template <typename TPiper> class To, typename Message>
+template <typename From, typename To, typename Message>
 class Edge{};
 
-template <template <typename T2> class T>
-class TemplateTypeSpecifier {};
+class MessageProcessorBase {
+public:
+    virtual ~MessageProcessorBase(){}
+};
+
+class MessageBase {
+public:
+    virtual ~MessageBase() {}
+};
 
 template <typename ... Args>
 class Piper {
 protected:
+    template <typename GlobalPiper>
+    class ReceiveHandler {
+    public:
+        virtual void CallReceive(GlobalPiper * piper) = 0;
+        virtual ~ReceiveHandler() {}
+    };
     int max_to_index;
     int max_edge_index;
     std::vector<std::vector<int>> dest_pipes;
-    std::vector<std::queue<void*>> queues;
+    std::vector<std::deque<std::unique_ptr<MessageBase>>> queues;
+    std::vector<std::unique_ptr<MessageProcessorBase>> message_processors;
 public:
     Piper()
     : max_to_index(0)
@@ -67,23 +40,29 @@ public:
     {
     }
 
-    template <template <typename TPiper> class To>
-    int GetToIndexImpl(const TemplateTypeSpecifier<To>&) {
+    template <typename To>
+    int GetToIndexImpl(const TypeSpecifier<To>&) {
         return -1;
     }
 
+    template <typename GlobalPiper>
+    void FillReceiveHandlersImpl(std::vector<std::unique_ptr<Piper::ReceiveHandler<GlobalPiper>>>&) {
+    }
     void GetEdgeIndexImpl() {}
     void GetAssosiatedEdgesImpl() {}
     void PushMessageToQueueImpl() {}
+
+    virtual ~Piper() {}
 };
 
-template <template <typename TPiper> class From, template <typename TPiper> class To, typename Message, typename ... Args>
+template <typename From, typename To, typename Message, typename ... Args>
 class Piper<Edge<From, To, Message>, Args...> : public Piper<Args...> {
 private:
     int cur_to_index;
     int cur_edge_index;
+    std::vector<std::unique_ptr<Piper<>::ReceiveHandler<Piper>>> receive_handlers;
 
-    template <template <typename TPiper> class From2>
+    template <typename From2>
     class SenderProxy {
     private:
         Piper& piper;
@@ -92,10 +71,26 @@ private:
         : piper(piper)
         {}
 
-        template <template <typename TPiper> class To2, typename Message2>
-        void Send(Message2 * message) {
-            piper.PushMessageToQueueImpl(TemplateTypeSpecifier<From2>(), TemplateTypeSpecifier<To>(), message);
+        template <typename To2, typename Message2>
+        void Send(std::unique_ptr<Message2> message) const {
+            piper.PushMessageToQueueImpl(TypeSpecifier<From2>(), TypeSpecifier<To2>(), std::move(message));
         }
+    };
+protected:
+    template <typename GlobalPiper>
+    class ReceiveHandler : public Piper<Args...>::template ReceiveHandler<GlobalPiper> {
+    public:
+        using Piper<Args...>::template ReceiveHandler<GlobalPiper>::ReceiveHandler;
+
+        virtual void CallReceive(GlobalPiper * piper) {
+            auto cur_parent = dynamic_cast<Piper *>(piper);
+            To* message_processor = dynamic_cast<To*>(cur_parent->message_processors[cur_parent->cur_to_index].get());
+            auto& current_queue = cur_parent->queues[cur_parent->cur_edge_index];
+            Message* value = dynamic_cast<Message*>(current_queue.front().get());
+            current_queue.pop_front();
+            message_processor->Receive(TypeSpecifier<From>(), *value, piper->GetSenderProxy<To>());
+        }
+        virtual ~ReceiveHandler() {}
     };
 public:
     using Piper<Args...>::max_to_index;
@@ -106,92 +101,128 @@ public:
     using Piper<Args...>::GetAssosiatedEdgesImpl;
     using Piper<Args...>::PushMessageToQueueImpl;
     using Piper<Args...>::queues;
+    using Piper<Args...>::message_processors;
     Piper()
     : Piper<Args...>()
     {
-        cur_to_index = Piper<Args...>::GetToIndexImpl(TemplateTypeSpecifier<To>());
+        cur_to_index = Piper<Args...>::GetToIndexImpl(TypeSpecifier<To>());
         if (cur_to_index == -1) {
             cur_to_index = max_to_index++;
             dest_pipes.push_back(std::vector<int>());
+            message_processors.push_back(std::make_unique<To>());
         }
         cur_edge_index = max_edge_index++;
         dest_pipes[cur_to_index].push_back(cur_edge_index);
-        queues.push_back(std::queue<void*>());
     }
-    int GetToIndexImpl(const TemplateTypeSpecifier<To>&) {
+    template <typename GlobalPiper>
+    void FillReceiveHandlersImpl(std::vector<std::unique_ptr<Piper<>::ReceiveHandler<GlobalPiper>>>& handlers) {
+        Piper<Args...>::template FillReceiveHandlersImpl<GlobalPiper>(handlers);
+        handlers.push_back(std::make_unique<ReceiveHandler<GlobalPiper>>());
+    }
+    void LastLevelInit() {
+        FillReceiveHandlersImpl<Piper>(receive_handlers);
+        queues = std::vector<std::deque<std::unique_ptr<MessageBase>>>(max_edge_index);
+    }
+
+    int GetToIndexImpl(const TypeSpecifier<To>&) {
         return cur_to_index;
     }
     int GetEdgeIndexImpl(const TypeSpecifier<Edge<From,To,Message>>&) {
         return cur_edge_index;
     }
-    std::vector<int> GetAssosiatedEdgesImpl(const TemplateTypeSpecifier<To>& specifier) {
+    std::vector<int> GetAssosiatedEdgesImpl(const TypeSpecifier<To>& specifier) {
         return dest_pipes[GetToIndexImpl(specifier)];
     }
-    void PushMessageToQueueImpl(const TemplateTypeSpecifier<From>&, const TemplateTypeSpecifier<To>&, Message * message) {
-        queues[cur_edge_index].push(static_cast<void*>(message));
+    void PushMessageToQueueImpl(const TypeSpecifier<From>&, const TypeSpecifier<To>&, std::unique_ptr<Message> message) {
+        queues[cur_edge_index].push_back(std::move(message));
+    }
+
+    void CallReceive(const int index) {
+        receive_handlers[index].get()->CallReceive(this);
+    }
+
+    template <typename From2>
+    SenderProxy<From2> GetSenderProxy() {
+        return SenderProxy<From2>(*this);
+    }
+
+    template <typename From2,typename To2, typename Message2>
+    void SendFromTo(std::unique_ptr<Message2> message) {
+        auto sender = GetSenderProxy<From2>();
+        sender.template Send<To2>(std::move(message));
+    }
+
+    virtual ~Piper() {}
+};
+
+template <typename ... Args>
+class MessagePassingTree : public Piper<Args...> {
+public:
+    using Piper<Args...>::SendFromTo;
+
+    MessagePassingTree()
+    : Piper<Args...>()
+    {
+        Piper<Args...>::LastLevelInit();
     }
 };
 
-
-template <typename TPiper>
-class MessageProcessorBase {
-protected:
-    TPiper& piper;
-public:
-    MessageProcessorBase(TPiper& piper)
-    : piper(piper)
-    {}
-};
-
-template <typename TPiper>
 class MessageProcessorA;
 
-template <typename TPiper>
 class MessageProcessorB;
 
-template <typename TPiper>
-class MessageProcessorA : public MessageProcessorBase<TPiper> {
+class DoubleMessage : public MessageBase {
 public:
-    using MessageProcessorBase<TPiper>::MessageProcessorBase;
-
-    void Receive(TemplateTypeSpecifier<MessageProcessorB>&, double& value) {
-        std::cout << "MessageProcessorA: I have got int value from MessageProcessorB " << value << std::endl;
-    }
+    DoubleMessage(const double a)
+    : a(a)
+    {}
+    double a;
+};
+class IntMessage: public MessageBase {
+public:
+    IntMessage(const int a)
+    : a(a)
+    {}
+    double a;
 };
 
-template <typename TPiper>
-class MessageProcessorB : public MessageProcessorBase<TPiper> {
+class MessageProcessorA : public MessageProcessorBase {
 public:
-    using MessageProcessorBase<TPiper>::MessageProcessorBase;
-    using MessageProcessorBase<TPiper>::piper;
+    using MessageProcessorBase::MessageProcessorBase;
 
-    void Receive(TemplateTypeSpecifier<MessageProcessorA>&, int& value) {
-        std::cout << "MessageProcessorB: I have got int value from MessageProcessorA " << value << std::endl;
-        piper.template Send<MessageProcessorB>(new double(1));
+    template <typename Sender>
+    void Receive(const TypeSpecifier<MessageProcessorB>&, const DoubleMessage& value, const Sender& sender) {
+        std::cout << "MessageProcessorA: I have got int value from MessageProcessorB " << value.a << std::endl;
+        sender.template Send<MessageProcessorB>(std::make_unique<IntMessage>(2 + static_cast<int>(value.a)));
     }
-    void Receive(TemplateTypeSpecifier<MessageProcessorA>&, double& value) {
-        std::cout << "MessageProcessorB: I have got double value from MessageProcessorA"  << value << std::endl;
-    }
+    virtual ~MessageProcessorA(){}
 };
 
+class MessageProcessorB : public MessageProcessorBase {
+public:
+    using MessageProcessorBase::MessageProcessorBase;
 
-template <typename T>
-class C1 {};
-template <typename T>
-class C2 {};
+    template <typename Sender>
+    void Receive(const TypeSpecifier<MessageProcessorA>&, const IntMessage& value, const Sender& sender) {
+        std::cout << "MessageProcessorB: I have got int value from MessageProcessorA " << value.a << std::endl;
+        sender.template Send<MessageProcessorA>(std::make_unique<DoubleMessage>(3 + value.a));
+    }
+    template <typename Sender>
+    void Receive(const TypeSpecifier<MessageProcessorA>&, const DoubleMessage& value, const Sender&) {
+        std::cout << "MessageProcessorB: I have got double value from MessageProcessorA"  << value.a << std::endl;
+    }
+    virtual ~MessageProcessorB() {}
+};
 
 int main(){
-//    Numerator<int, double, float> numerator;
-//    std::cout << numerator.GetCounter<double>() << " " << numerator.GetCounter<int>() << " " << numerator.GetCounter<float>()  << std::endl;
-    Piper<Edge<C1, C1, int>, Edge<C2, C2, double>, Edge<C2, C2, int>> piper;
-    std::cout << piper.GetToIndexImpl(TemplateTypeSpecifier<C1>()) << " " << piper.GetToIndexImpl(TemplateTypeSpecifier<C2>()) << std::endl;
-    std::cout << piper.GetEdgeIndexImpl(TypeSpecifier<Edge<C1, C1, int>>()) << std::endl;
-    auto edges = piper.GetAssosiatedEdgesImpl(TemplateTypeSpecifier<C2>());
-    std::for_each(edges.begin(), edges.end(), [] (const auto& edge) {std::cout << " " << edge;});
-    std::cout << std::endl;
-    edges = piper.GetAssosiatedEdgesImpl(TemplateTypeSpecifier<C1>());
-    std::for_each(edges.begin(), edges.end(), [] (const auto& edge) {std::cout << " " << edge;});
-    std::cout << std::endl;
+    MessagePassingTree<
+        Edge<MessageProcessorA, MessageProcessorB, IntMessage>,
+        Edge<MessageProcessorB, MessageProcessorA, DoubleMessage>> message_passing_tree;
 
+    message_passing_tree.SendFromTo<MessageProcessorB, MessageProcessorA>(std::make_unique<DoubleMessage>(1));
+    for (size_t i = 0; i < 10; ++i) {
+        message_passing_tree.CallReceive(0);
+        message_passing_tree.CallReceive(1);
+    }
     return 0;
 }
