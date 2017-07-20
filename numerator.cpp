@@ -42,16 +42,21 @@ protected:
     template <typename GlobalPiper>
     class MessageProcessorProxy {
     public:
-        MessageProcessorProxy(GlobalPiper& piper, const bool is_to)
+        MessageProcessorProxy(GlobalPiper& piper, const int message_processor_index)
         : piper(piper)
-        , is_to(is_to)
+        , message_processor_index(message_processor_index)
         {}
+
+        template <typename MP>
+        MP& GetMessageProcessor() const {
+            return *dynamic_cast<MP*>(piper.message_processors[message_processor_index].get());
+        }
 
         virtual void Ping() const = 0;
         virtual ~MessageProcessorProxy() {}
     protected:
         GlobalPiper& piper;
-        bool is_to;
+        int message_processor_index;
     };
 
     int max_message_processor_index;
@@ -106,19 +111,11 @@ protected:
     template <typename GlobalPiper, typename MP>
     class MessageProcessorProxy : public Piper<>::MessageProcessorProxy<GlobalPiper> {
     public:
-        using Piper<>:: MessageProcessorProxy<GlobalPiper>::MessageProcessorProxy;
-        using Piper<>:: MessageProcessorProxy<GlobalPiper>::piper;
-        using Piper<>:: MessageProcessorProxy<GlobalPiper>::is_to;
+        using Piper<>::MessageProcessorProxy<GlobalPiper>::MessageProcessorProxy;
+        using Piper<>::MessageProcessorProxy<GlobalPiper>::piper;
 
         virtual void Ping() const {
-            auto& cur_piper = *dynamic_cast<Piper *>(&piper);
-            int message_processor_index;
-            if (is_to) {
-                message_processor_index = cur_piper.cur_to_index;
-            } else {
-                message_processor_index = cur_piper.cur_from_index;
-            }
-            MP& message_processor = *dynamic_cast<MP*>(cur_piper.message_processors[message_processor_index].get());
+            auto& message_processor = MessageProcessorProxy::template GetMessageProcessor<MP>();
             message_processor.Ping(SenderProxy<GlobalPiper, MP>(piper));
         }
     };
@@ -162,7 +159,7 @@ public:
             target_index = max_message_processor_index++;
             dest_pipes.push_back(std::vector<int>());
             message_processors.push_back(std::make_unique<MP>());
-            message_processor_handlers.push_back(std::make_unique<MessageProcessorProxy<GlobalPiper, MP>>(piper, is_to));
+            message_processor_handlers.push_back(std::make_unique<MessageProcessorProxy<GlobalPiper, MP>>(piper, target_index));
         }
     }
 
