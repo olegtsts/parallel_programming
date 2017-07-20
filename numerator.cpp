@@ -2,6 +2,7 @@
 #include <vector>
 #include <deque>
 #include <memory>
+#include <algorithm>
 
 template <typename T>
 class TypeSpecifier {};
@@ -72,7 +73,6 @@ public:
 
     template <typename GlobalPiper>
     void FillEdgeProxysImpl(GlobalPiper&, std::vector<std::unique_ptr<Piper::EdgeProxy<GlobalPiper>>>&) {}
-    void GetAssosiatedEdgesImpl() {}
     void GetEdgeIndexImpl() {}
     template <typename GlobalPiper>
     void AddMessageProcessorsImpl(GlobalPiper& ,
@@ -103,18 +103,12 @@ protected:
         GlobalPiper& piper;
     };
 
-    template <typename GlobalPiper>
-    class MessageProcessorProxy : public Piper<Args...>::template MessageProcessorProxy<GlobalPiper> {
+    template <typename GlobalPiper, typename MP>
+    class MessageProcessorProxy : public Piper<>::MessageProcessorProxy<GlobalPiper> {
     public:
-        using Piper<Args...>::template MessageProcessorProxy<GlobalPiper>::MessageProcessorProxy;
-        using Piper<Args...>::template MessageProcessorProxy<GlobalPiper>::piper;
-        using Piper<Args...>::template MessageProcessorProxy<GlobalPiper>::is_to;
-
-        template <typename MP>
-        void PingImpl(MessageProcessorBase* message_processor) const {
-            MP& cur_message_processor = *dynamic_cast<MP*>(message_processor);
-            cur_message_processor.Ping(SenderProxy<GlobalPiper, MP>(piper));
-        }
+        using Piper<>:: MessageProcessorProxy<GlobalPiper>::MessageProcessorProxy;
+        using Piper<>:: MessageProcessorProxy<GlobalPiper>::piper;
+        using Piper<>:: MessageProcessorProxy<GlobalPiper>::is_to;
 
         virtual void Ping() const {
             auto& cur_piper = *dynamic_cast<Piper *>(&piper);
@@ -124,20 +118,16 @@ protected:
             } else {
                 message_processor_index = cur_piper.cur_from_index;
             }
-            MessageProcessorBase* message_processor = cur_piper.message_processors[message_processor_index].get();
-            if (is_to) {
-                PingImpl<To>(message_processor);
-            } else {
-                PingImpl<From>(message_processor);
-            }
+            MP& message_processor = *dynamic_cast<MP*>(cur_piper.message_processors[message_processor_index].get());
+            message_processor.Ping(SenderProxy<GlobalPiper, MP>(piper));
         }
     };
 
     template <typename GlobalPiper>
-    class EdgeProxy : public Piper<Args...>::template EdgeProxy<GlobalPiper> {
+    class EdgeProxy : public Piper<>::EdgeProxy<GlobalPiper> {
     public:
-        using Piper<Args...>::template EdgeProxy<GlobalPiper>::EdgeProxy;
-        using Piper<Args...>::template EdgeProxy<GlobalPiper>::piper;
+        using Piper<>::EdgeProxy<GlobalPiper>::EdgeProxy;
+        using Piper<>::EdgeProxy<GlobalPiper>::piper;
 
         virtual void NotifyAboutMessage() const {
             auto& cur_piper = *dynamic_cast<Piper *>(&piper);
@@ -154,7 +144,6 @@ public:
     using Piper<Args...>::GetMessageProcessorIndexImpl;
     using Piper<Args...>::max_edge_index;
     using Piper<Args...>::dest_pipes;
-    using Piper<Args...>::GetAssosiatedEdgesImpl;
     using Piper<Args...>::queues;
     using Piper<Args...>::message_processors;
     using Piper<Args...>::GetEdgeIndexImpl;
@@ -173,7 +162,7 @@ public:
             target_index = max_message_processor_index++;
             dest_pipes.push_back(std::vector<int>());
             message_processors.push_back(std::make_unique<MP>());
-            message_processor_handlers.push_back(std::make_unique<MessageProcessorProxy<GlobalPiper>>(piper, is_to));
+            message_processor_handlers.push_back(std::make_unique<MessageProcessorProxy<GlobalPiper, MP>>(piper, is_to));
         }
     }
 
@@ -204,10 +193,6 @@ public:
         return cur_edge_index;
     }
 
-    std::vector<int> GetAssosiatedEdgesImpl(const TypeSpecifier<To>& specifier) {
-        return dest_pipes[GetMessageProcessorIndexImpl(specifier)];
-    }
-
     virtual ~Piper() {}
 private:
     int cur_to_index;
@@ -220,6 +205,8 @@ class MessagePassingTree : public Piper<Args...> {
 private:
     using GlobalPiper = Piper<Args...>;
 public:
+    using GlobalPiper::dest_pipes;
+
     MessagePassingTree()
     : GlobalPiper()
     {
@@ -233,6 +220,13 @@ public:
 
     const Piper<>::MessageProcessorProxy<GlobalPiper>* GetMessageProcessorProxy(const int index) {
         return message_processor_handlers[index].get();
+    }
+
+    void OutputDestPipes() {
+        for (auto& pipe: dest_pipes) {
+            std::for_each(pipe.begin(), pipe.end(), [](const int num) {std::cout << " " << num;});
+            std::cout << std::endl;
+        }
     }
 private:
     std::vector<std::unique_ptr<Piper<>::EdgeProxy<GlobalPiper>>> edge_handers;
@@ -302,5 +296,6 @@ int main(){
         message_passing_tree.GetEdgeProxy(0)->NotifyAboutMessage();
         message_passing_tree.GetEdgeProxy(1)->NotifyAboutMessage();
     }
+    message_passing_tree.OutputDestPipes();
     return 0;
 }
