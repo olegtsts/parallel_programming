@@ -1,6 +1,7 @@
 #include "proto.pb.h"
 #include <iostream>
 #include <string>
+#include <fstream>
 
 int main() {
     tutorial::Person person;
@@ -16,6 +17,15 @@ int main() {
     std::cout << parsed_person.x() << std::endl;
     std::cout << parsed_person.DebugString() << std::endl;
     std::cout << parsed_person.example().at(4) << std::endl;
+
+    std::ifstream fh("proto_dump.txt");
+    tutorial::Person read_person;
+    read_person.ParseFromIstream(&fh);
+    std::cout << read_person.name() << std::endl;
+    std::cout << read_person.x() << std::endl;
+    std::cout << read_person.DebugString() << std::endl;
+    std::cout << read_person.example().at(4) << std::endl;
+
 }
-//protoc proto.proto --cpp_out=.
+//protoc proto.proto --js_out=library=person,binary:. --cpp_out=.
 //g++-5 proto-test.cpp proto.pb.cc -lprotobuf
