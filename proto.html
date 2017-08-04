@@ -1,0 +1,41 @@
+<head>
+	<title> Proto example </title>
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+	<script src="/Users/olegts/closure-library/closure/goog/base.js" type="text/javascript".></script>
+	<script src="/Users/olegts/protobuf/js/map.js"></script>
+	<script src="/Users/olegts/protobuf/js/message.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/constants.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/utils.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/arith.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/decoder.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/encoder.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/reader.js"></script>
+	<script src="/Users/olegts/protobuf/js/binary/writer.js"></script>
+	<script src="/Users/olegts/FileSaver.js/FileSaver.js"> </script>
+	<script src="person.js"></script> <!-- auto-generated protobuf definition -->
+</head>
+<!-- https://github.com/google/closure-library -->
+<!-- https://github.com/google/protobuf.git -->
+<!-- https://github.com/eligrey/FileSaver.js.git -->
+<body>
+	<script type="text/javascript">
+		$(function() {
+			goog.require('proto.tutorial.Person');
+			var message = new proto.tutorial.Person();
+			message.setName("olegts");
+			message.setX(456);
+			message.getExampleMap().set(4, 5);
+			console.log(message.getName());
+			console.log(message.getExampleMap().get(4));
+			console.log(message.getX());
+			var bytes = message.serializeBinary();
+			console.log(bytes);
+			var other_message = proto.tutorial.Person.deserializeBinary(bytes);
+			console.log(other_message.getName());
+			console.log(other_message.getExampleMap().get(4));
+			console.log(other_message.getX());
+			var blob = new Blob([bytes], {type: "text/plain"});
+			saveAs(blob, "proto_dump.txt");
+		});
+	</script>
+</body>
