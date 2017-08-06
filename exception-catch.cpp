@@ -66,7 +66,6 @@ static _Unwind_Reason_Code trace_func(_Unwind_Context* context, void* void_state
     return(_URC_NO_REASON);
 }
 
-
 std::string BackTraceUsingUnwind(const unsigned int skip_count) {
   StackCrowlState state{skip_count + 1};
   _Unwind_Backtrace(trace_func,&state);
