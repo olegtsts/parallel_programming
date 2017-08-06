@@ -1,5 +1,6 @@
 #include <type_traits>
 #include <iostream>
+#include <vector>
 
 class Base {
 public:
@@ -27,9 +28,8 @@ public:
 };
 
 int main(){
-    Base * b = new B();
-    b->OutputIsNoexcept();
-    Base * c = new C();
-    c->OutputIsNoexcept();
+    std::vector<Base*> vec{new B(), new C()};
+    for (auto& pointer: vec) {
+        pointer->OutputIsNoexcept();
+    }
 }
-
