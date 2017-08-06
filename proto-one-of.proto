@@ -10,15 +10,15 @@ message SampleMessage {
         int64 third = 2;
     }
 
-	oneof test_oneof {
-		FirstMessage first_message = 2;
-		SecondMessage second_message = 3;
-	}
+    oneof test_oneof {
+        FirstMessage first_message = 2;
+        SecondMessage second_message = 3;
+    }
 
-	enum MessageType {
-		First = 0;
-		Second = 1;
-	}
+    enum MessageType {
+        First = 0;
+        Second = 1;
+    }
 
-	MessageType message_type = 1;
+    MessageType message_type = 1;
 }
