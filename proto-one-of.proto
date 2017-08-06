@@ -22,11 +22,3 @@ message SampleMessage {
 
 	MessageType message_type = 1;
 }
-message SampleMessage2 {
-  oneof test_oneof {
-    string name = 4;
-    string sub_message = 9;
-  }
-}
-//protoc proto-one-of.proto --cpp_out=.
-//g++-7 proto-one-of.cpp proto-one-of.pb.cc -lprotobuf

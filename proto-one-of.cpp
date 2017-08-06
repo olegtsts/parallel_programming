@@ -42,3 +42,5 @@ int main() {
     ReadCommonMessage(GetSecondMessage());
     return 0;
 }
+//protoc proto-one-of.proto --cpp_out=.
+//g++-7 proto-one-of.cpp proto-one-of.pb.cc -lprotobuf
