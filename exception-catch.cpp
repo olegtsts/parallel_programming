@@ -70,10 +70,11 @@ std::string BackTraceUsingUnwind(const unsigned int skip_count) {
   return state.ss.str();
 }
 
-class MyException {
+class MyException : public std::exception {
 public:
     MyException() {
         try {
+
             exception_backtrace = BackTraceUsingUnwind(1);
         } catch (...) {
             try {
@@ -83,6 +84,9 @@ public:
         }
     }
 
+    const char* what() const noexcept {
+        return exception_backtrace.c_str();
+    }
     const std::string& GetStackTrace() const {
         return exception_backtrace;
     }
@@ -102,14 +106,7 @@ void Func() {
 }
 
 int main() {
-    try {
-        Func();
-        //
-        //
-    } catch(const MyException& e) {
-        std::cout << "Exception caught\n";
-        std::cout << e.GetStackTrace();
-    }
+    Func();
     std::cout << "Finished\n";
     return 0;
 }
