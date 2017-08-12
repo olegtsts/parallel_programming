@@ -13,7 +13,12 @@ public:
     virtual void ApplyTo(TState& state) {}
 };
 
-class State {
+class BaseState {
+public:
+    int field;
+};
+
+class State : public BaseState {
 public:
     friend class FirstUpdate;
     friend class SecondUpdate;
@@ -21,10 +26,16 @@ private:
     int a;
 };
 
-class SecondState {
+class SecondState : public BaseState {
 public:
 };
 
+class SameUpdate : public ApplicableTo<BaseState> {
+public:
+    void ApplyTo(BaseState& state) {
+        state.field = 0;
+    }
+};
 
 class FirstUpdate : public ApplicableTo<State, SecondState> {
 public:
@@ -53,4 +64,7 @@ int main() {
     ApplicableTo<SecondState>* third_update = new FirstUpdate();
     SecondState second_state;
     third_update->ApplyTo(second_state);
+    ApplicableTo<BaseState>* forth_update = new SameUpdate();
+    forth_update->ApplyTo(state);
+    forth_update->ApplyTo(second_state);
 }
